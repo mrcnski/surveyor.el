@@ -36,12 +36,15 @@
 ;; Diagrams are produced by a pluggable engine (`surveyor-engine'):
 ;;
 ;; - `d2': single Go binary (`brew install d2'), fast native rendering.
-;; - `mermaid': needs mermaid-cli (`mmdc' or npx), which drives headless
+;; - `mermaid': needs mermaid-cli (`mmdc'), which drives headless
 ;;   Chromium; best LLM fluency and pairs with org-babel/ob-mermaid.
 ;; - `dot': Graphviz, tiny and fast, but flowcharts only.
 ;;
 ;; The default `auto' picks the first engine whose binary is installed,
-;; in the order d2, mermaid, dot.
+;; in the order d2, mermaid, dot.  Setting `surveyor-engine' to
+;; `mermaid' explicitly also enables an npx fallback when `mmdc' is
+;; missing; `auto' never does, because that first npx run downloads
+;; headless Chromium.
 ;;
 ;; Entry points: `surveyor-defun' and `surveyor-file'.
 ;;
@@ -72,7 +75,13 @@
   "Diagram engine to use.
 `auto' picks the first available engine in the order d2, mermaid,
 dot.  See `surveyor-engines' for what each engine requires and
-which diagram kinds it supports."
+which diagram kinds it supports.
+
+Under `auto', mermaid only counts as available when `mmdc' is
+actually installed.  Setting this to `mermaid' explicitly also
+enables the \"npx -y @mermaid-js/mermaid-cli\" fallback, which
+downloads mermaid-cli and headless Chromium (hundreds of MB) into
+the npx cache on first use."
   :type '(choice (const :tag "First available (d2, mermaid, dot)" auto)
                  (const d2) (const mermaid) (const dot)))
 
@@ -114,20 +123,24 @@ view buffer is displayed with the action category `surveyor', which
 
 ;;;; Engines
 
-(defun surveyor--d2-program ()
+(defun surveyor--d2-program (&optional _explicit)
   "Return the d2 invocation as a list, or nil if unavailable."
   (when (executable-find surveyor-d2-command)
     (list surveyor-d2-command)))
 
-(defun surveyor--mermaid-program ()
-  "Return the mermaid-cli invocation as a list, or nil if unavailable."
+(defun surveyor--mermaid-program (&optional explicit)
+  "Return the mermaid-cli invocation as a list, or nil if unavailable.
+The npx fallback downloads mermaid-cli and headless Chromium (hundreds
+of MB) into the npx cache on first use, so it is only offered when
+EXPLICIT is non-nil -- when the user set `surveyor-engine' to `mermaid'
+rather than relying on `auto' detection."
   (cond
    ((executable-find surveyor-mmdc-command)
     (list surveyor-mmdc-command))
-   ((executable-find "npx")
+   ((and explicit (executable-find "npx"))
     (list "npx" "-y" "@mermaid-js/mermaid-cli"))))
 
-(defun surveyor--dot-program ()
+(defun surveyor--dot-program (&optional _explicit)
   "Return the Graphviz dot invocation as a list, or nil if unavailable."
   (when (executable-find surveyor-dot-command)
     (list surveyor-dot-command)))
@@ -196,8 +209,10 @@ Include loops, early returns and error paths; collapse straight-line
 statements into single nodes."))))
   "Alist of engine name to engine definition plist.
 Keys: :fence (code-fence language tag), :in-ext / :out-ext (temp file
-extensions), :program (function returning the command as a list, or nil
-when unavailable), :render-args (function from input and output file to
+extensions), :program (function of one argument EXPLICIT -- non-nil when
+the user pinned this engine in `surveyor-engine' -- returning the
+command as a list, or nil when unavailable), :render-args (function from
+input and output file to
 argument list), :bare-re (regexp matching an unfenced response's leading
 declaration, or nil), :syntax (engine syntax guidance for the LLM), and
 :kinds (alist of diagram kind to LLM instruction).")
@@ -213,7 +228,8 @@ Signal a `user-error' when no engine's program can be found."
                       (list surveyor-engine))))
     (or (cl-loop for name in candidates
                  for plist = (alist-get name surveyor-engines)
-                 when (and plist (funcall (plist-get plist :program)))
+                 when (and plist (funcall (plist-get plist :program)
+                                          (eq surveyor-engine name)))
                  return (cons name plist))
         (user-error
          "No diagram engine available%s; install d2, mermaid-cli, or graphviz"
@@ -310,7 +326,8 @@ matches it."
   "Render diagram SOURCE with engine ENGINE-NAME.
 Return (:file FILE) on success or (:error STRING) on failure."
   (let* ((engine (alist-get engine-name surveyor-engines))
-         (program (funcall (plist-get engine :program))))
+         (program (funcall (plist-get engine :program)
+                           (eq surveyor-engine engine-name))))
     (if (not program)
         (list :error (format "engine %s is not available" engine-name))
       (let ((in (make-temp-file "surveyor-" nil (plist-get engine :in-ext)

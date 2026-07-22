@@ -10,6 +10,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'cl-lib)
 
 ;; Allow running under `emacs -Q' without gptel installed; surveyor only
 ;; calls gptel functions at runtime, never at load time.
@@ -109,6 +110,29 @@
   "Every auto-order engine is defined."
   (dolist (name surveyor--engine-order)
     (should (alist-get name surveyor-engines))))
+
+(ert-deftest surveyor-mermaid-npx-only-when-explicit ()
+  "The npx fallback needs an explicit `surveyor-engine' setting."
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (cmd) (when (equal cmd "npx") "/usr/bin/npx"))))
+    (should-not (surveyor--mermaid-program))
+    (should (equal (surveyor--mermaid-program t)
+                   '("npx" "-y" "@mermaid-js/mermaid-cli")))))
+
+(ert-deftest surveyor-mermaid-mmdc-always-offered ()
+  "An installed mmdc is used regardless of explicitness."
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (cmd) (when (equal cmd "mmdc") "/usr/local/bin/mmdc"))))
+    (should (equal (surveyor--mermaid-program) '("mmdc")))))
+
+(ert-deftest surveyor-auto-never-picks-npx-mermaid ()
+  "With only npx installed, auto errors instead of picking mermaid."
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (cmd) (when (equal cmd "npx") "/usr/bin/npx"))))
+    (let ((surveyor-engine 'auto))
+      (should-error (surveyor--resolve-engine) :type 'user-error))
+    (let ((surveyor-engine 'mermaid))
+      (should (eq (car (surveyor--resolve-engine)) 'mermaid)))))
 
 (ert-deftest surveyor-system-prompt-uses-fence ()
   (should (string-match-p "```d2"

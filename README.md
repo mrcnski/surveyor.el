@@ -33,9 +33,11 @@ repair, and shows the image in a view buffer.
 - [gptel](https://github.com/karthink/gptel), configured with a backend
 - At least one diagram engine:
   - **d2** — `brew install d2` (recommended: fast, no browser)
-  - **mermaid** — `npm install -g @mermaid-js/mermaid-cli` for `mmdc`
-    (falls back to `npx -y @mermaid-js/mermaid-cli`); pulls in headless
-    Chromium via puppeteer
+  - **mermaid** — `npm install -g @mermaid-js/mermaid-cli` for `mmdc`;
+    pulls in headless Chromium via puppeteer. Setting `surveyor-engine`
+    to `mermaid` explicitly also enables an `npx -y @mermaid-js/mermaid-cli`
+    fallback (`auto` never uses npx, since its first run downloads
+    Chromium unprompted)
   - **dot** — `brew install graphviz`
 
 ## Installation
