@@ -20,28 +20,42 @@
              (file-name-directory (or load-file-name buffer-file-name)))
 (require 'surveyor)
 
-;;;; surveyor-extract-mermaid
+;;;; surveyor-extract-source
 
 (ert-deftest surveyor-extract-fenced ()
-  "Extracts a fenced mermaid block surrounded by prose."
-  (should (equal (surveyor-extract-mermaid
-                  "Here you go:\n```mermaid\nflowchart TD\n  A --> B\n```\nEnjoy!")
+  "Extracts a matching fenced block surrounded by prose."
+  (should (equal (surveyor-extract-source
+                  "Here you go:\n```mermaid\nflowchart TD\n  A --> B\n```\nEnjoy!"
+                  "mermaid")
                  "flowchart TD\n  A --> B")))
 
 (ert-deftest surveyor-extract-first-fence ()
   "With multiple fences, extracts the first."
-  (should (equal (surveyor-extract-mermaid
-                  "```mermaid\ngraph LR\n A-->B\n```\ntext\n```mermaid\ngraph LR\n C-->D\n```")
-                 "graph LR\n A-->B")))
+  (should (equal (surveyor-extract-source
+                  "```d2\na -> b\n```\ntext\n```d2\nc -> d\n```"
+                  "d2")
+                 "a -> b")))
+
+(ert-deftest surveyor-extract-any-fence-fallback ()
+  "Falls back to any fenced block when the tag doesn't match."
+  (should (equal (surveyor-extract-source
+                  "```\ndigraph { a -> b }\n```" "dot")
+                 "digraph { a -> b }")))
 
 (ert-deftest surveyor-extract-bare ()
-  "Accepts a bare response starting with a diagram declaration."
-  (should (equal (surveyor-extract-mermaid "sequenceDiagram\n  A->>B: hi")
+  "Accepts a bare response matching the engine's declaration regexp."
+  (should (equal (surveyor-extract-source
+                  "sequenceDiagram\n  A->>B: hi" "mermaid"
+                  "\\(?:flowchart\\|sequenceDiagram\\)")
                  "sequenceDiagram\n  A->>B: hi")))
 
+(ert-deftest surveyor-extract-no-bare-without-re ()
+  "Rejects a bare response when the engine has no declaration regexp."
+  (should-not (surveyor-extract-source "a -> b" "d2")))
+
 (ert-deftest surveyor-extract-none ()
-  "Returns nil when the response contains no diagram."
-  (should-not (surveyor-extract-mermaid "I cannot draw that.")))
+  (should-not (surveyor-extract-source "I cannot draw that." "mermaid"
+                                       "\\(?:flowchart\\)")))
 
 ;;;; surveyor--clip
 
@@ -55,10 +69,15 @@
 
 ;;;; surveyor--build-prompt
 
+(defun surveyor-test--engine (name)
+  "Return engine plist for NAME."
+  (alist-get name surveyor-engines))
+
 (ert-deftest surveyor-build-prompt-includes-parts ()
   (let ((prompt (surveyor--build-prompt
                  (list :kind 'flowchart :code "(defun f () 1)"
-                       :symbols '("f" "g") :mode 'emacs-lisp-mode))))
+                       :symbols '("f" "g") :mode 'emacs-lisp-mode)
+                 (surveyor-test--engine 'mermaid))))
     (should (string-match-p "Diagram kind: flowchart" prompt))
     (should (string-match-p "- f\n- g" prompt))
     (should (string-match-p "(defun f () 1)" prompt))
@@ -69,13 +88,32 @@
   (should-not (string-match-p
                "imenu"
                (surveyor--build-prompt
-                (list :kind 'class :code "x" :symbols nil :mode 'text-mode)))))
+                (list :kind 'class :code "x" :symbols nil :mode 'text-mode)
+                (surveyor-test--engine 'mermaid)))))
 
-;;;; surveyor-kinds
+;;;; Engine definitions
 
-(ert-deftest surveyor-kinds-have-instructions ()
-  (dolist (kind '(flowchart sequence class))
-    (should (stringp (alist-get kind surveyor-kinds)))))
+(ert-deftest surveyor-engines-well-formed ()
+  "Every engine has the required keys and non-empty kinds."
+  (dolist (entry surveyor-engines)
+    (let ((plist (cdr entry)))
+      (dolist (key '(:fence :in-ext :out-ext :program :render-args :syntax :kinds))
+        (should (plist-member plist key)))
+      (should (fboundp (plist-get plist :program)))
+      (should (fboundp (plist-get plist :render-args)))
+      (should (consp (plist-get plist :kinds)))
+      (dolist (kind (plist-get plist :kinds))
+        (should (stringp (cdr kind)))))))
+
+(ert-deftest surveyor-engine-order-covered ()
+  "Every auto-order engine is defined."
+  (dolist (name surveyor--engine-order)
+    (should (alist-get name surveyor-engines))))
+
+(ert-deftest surveyor-system-prompt-uses-fence ()
+  (should (string-match-p "```d2"
+                          (surveyor--system-prompt
+                           (surveyor-test--engine 'd2)))))
 
 (provide 'surveyor-test)
 ;;; surveyor-test.el ends here
