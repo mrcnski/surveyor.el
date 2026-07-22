@@ -50,6 +50,46 @@ Not yet on MELPA. From a checkout:
   :commands (surveyor-defun surveyor-file))
 ```
 
+## Setting up gptel
+
+Surveyor sends its prompts through gptel, so gptel must have a working
+backend and API key. If you see:
+
+```
+user-error: No ‘gptel-api-key’ found in the auth source
+```
+
+gptel is using its default backend (OpenAI/ChatGPT) and looking for a key in
+your auth-source (`~/.authinfo`). Either provide that key:
+
+```
+machine api.openai.com login apikey password sk-your-key-here
+```
+
+or configure a different backend. Anthropic example:
+
+```elisp
+;; Key from ~/.authinfo:
+;;   machine api.anthropic.com login apikey password sk-ant-your-key
+(setq gptel-model 'claude-opus-4-8
+      gptel-backend (gptel-make-anthropic "Claude"
+                      :stream t
+                      :key gptel-api-key-from-auth-source))
+```
+
+Local model via Ollama (no key needed):
+
+```elisp
+(setq gptel-model 'llama3.1
+      gptel-backend (gptel-make-ollama "Ollama"
+                      :host "localhost:11434"
+                      :stream t
+                      :models '(llama3.1)))
+```
+
+See the [gptel README](https://github.com/karthink/gptel#setup) for all
+supported backends (OpenAI, Anthropic, Gemini, Ollama, llama.cpp, and more).
+
 ## Usage
 
 `M-x surveyor-defun` or `M-x surveyor-file`, pick a diagram kind, wait for
@@ -92,6 +132,10 @@ alist entirely.
 
 ## Roadmap
 
+- Tree-sitter grounding: prefer `treesit-defun-at-point` /
+  `treesit-defun-name` over `bounds-of-thing-at-point` + `add-log-current-defun`
+  in tree-sitter modes — crisper bounds and names for nested functions and
+  methods with receivers
 - Transient entry menu (scope × kind × destination)
 - Directory/project scope (dependency and C4 architecture diagrams)
 - Org destination: insert a `#+begin_src` block instead of an image
