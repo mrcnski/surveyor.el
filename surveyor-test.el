@@ -150,5 +150,24 @@
                           (surveyor--system-prompt
                            (surveyor-test--engine 'd2)))))
 
+;;;; View buffer
+
+(ert-deftest surveyor-save-default-name ()
+  "Default save name combines context name, kind, and image extension."
+  (with-temp-buffer
+    (setq-local surveyor--context '(:name "foo/bar baz.el" :kind flowchart)
+                surveyor--file "/tmp/surveyor-abc123.svg")
+    (should (equal (surveyor--save-default-name)
+                   "foo-bar-baz.el-flowchart.svg"))))
+
+(ert-deftest surveyor-view-mode-header-line ()
+  "The view mode advertises its keys in the header line."
+  (with-temp-buffer
+    (surveyor-view-mode)
+    (should (stringp header-line-format))
+    (dolist (part '("g regenerate" "s source" "w copy" "S save"
+                    "zoom" "0 refit" "q quit"))
+      (should (string-search part header-line-format)))))
+
 (provide 'surveyor-test)
 ;;; surveyor-test.el ends here

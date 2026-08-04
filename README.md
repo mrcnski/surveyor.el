@@ -25,8 +25,8 @@ repair, and shows the image in a view buffer.
   list.
 - **Repair loop:** invalid Mermaid is rendered anyway, and the renderer error is
   fed back to the LLM for a corrected attempt (`surveyor-max-repair-attempts`).
-- **View buffer:** the diagram is scaled to fit the window; `g` regenerate,
-  `s` show Mermaid source, `w` copy source, `+`/`-` zoom, `0` refit, `q` quit.
+- **View buffer:** the diagram is scaled to fit the window, with the available
+  keys in the header line.
 
 ## Requirements
 

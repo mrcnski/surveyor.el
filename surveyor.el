@@ -46,8 +46,8 @@
 ;;
 ;; Entry points: `surveyor-defun' and `surveyor-file'.
 ;;
-;; In the rendered view buffer: `g' regenerates, `s' shows the diagram source,
-;; `w' copies it, `+'/`-' zoom, `0' refits to the window, `q' quits.
+;; In the rendered view buffer, the diagram is scaled to fit the window, with
+;; the available keys in the header line.
 
 ;;; Code:
 
@@ -394,6 +394,7 @@ Return (:file FILE) on success or (:error STRING) on failure."
   "g" #'surveyor-regenerate
   "s" #'surveyor-show-source
   "w" #'surveyor-copy-source
+  "S" #'surveyor-save-image
   "+" #'surveyor-zoom-in
   "=" #'surveyor-zoom-in
   "-" #'surveyor-zoom-out
@@ -401,7 +402,17 @@ Return (:file FILE) on success or (:error STRING) on failure."
 
 (define-derived-mode surveyor-view-mode special-mode "Surveyor"
   "Major mode for viewing surveyor diagrams."
-  (setq-local cursor-type nil))
+  (setq-local cursor-type nil)
+  (setq-local header-line-format
+              (substitute-command-keys
+               (concat "\\<surveyor-view-mode-map>"
+                       "\\[surveyor-regenerate] regenerate"
+                       "  \\[surveyor-show-source] source"
+                       "  \\[surveyor-copy-source] copy"
+                       "  \\[surveyor-save-image] save"
+                       "  \\[surveyor-zoom-in]/\\[surveyor-zoom-out] zoom"
+                       "  \\[surveyor-zoom-reset] refit"
+                       "  \\[quit-window] quit"))))
 
 (defun surveyor--display (buffer)
   "Display BUFFER according to the user's display configuration.
@@ -503,6 +514,26 @@ the window are not scaled up."
     (user-error "No diagram source in this buffer"))
   (kill-new surveyor--source)
   (message "Copied diagram source"))
+
+(defun surveyor--save-default-name ()
+  "Default file name for saving this buffer's diagram image."
+  (format "%s-%s%s"
+          (replace-regexp-in-string "[ /]" "-"
+                                    (plist-get surveyor--context :name))
+          (plist-get surveyor--context :kind)
+          (file-name-extension surveyor--file t)))
+
+(defun surveyor-save-image (file)
+  "Save the rendered diagram image to FILE."
+  (interactive
+   (progn
+     (unless surveyor--file
+       (user-error "No diagram in this buffer"))
+     (list (read-file-name "Save diagram to: " nil nil nil
+                           (surveyor--save-default-name))))
+   surveyor-view-mode)
+  (copy-file surveyor--file file 1)
+  (message "Saved diagram to %s" file))
 
 ;;;; Entry points
 
