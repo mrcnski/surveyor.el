@@ -134,6 +134,17 @@
     (let ((surveyor-engine 'mermaid))
       (should (eq (car (surveyor--resolve-engine)) 'mermaid)))))
 
+;;;; Image fitting
+
+(ert-deftest surveyor-fit-scale-shrinks-large-image ()
+  (should (= (surveyor--fit-scale '(2000 . 1000) 1000 1000) 0.5)))
+
+(ert-deftest surveyor-fit-scale-bounded-by-height ()
+  (should (= (surveyor--fit-scale '(100 . 400) 1000 200) 0.5)))
+
+(ert-deftest surveyor-fit-scale-never-upscales ()
+  (should (= (surveyor--fit-scale '(100 . 50) 1000 1000) 1.0)))
+
 (ert-deftest surveyor-system-prompt-uses-fence ()
   (should (string-match-p "```d2"
                           (surveyor--system-prompt
