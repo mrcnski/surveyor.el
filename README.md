@@ -14,31 +14,30 @@ repair, and shows the image in a view buffer.
 
 - **Scopes:** defun at point (`surveyor-defun`) or whole file (`surveyor-file`).
 - **Kinds:** control-flow `flowchart`, `sequence` diagram, `class` diagram.
-- **Pluggable engines:** [D2](https://d2lang.com/) (single Go binary, instant
-  renders), [Mermaid](https://mermaid.js.org/) (best LLM fluency, pairs with
-  ob-mermaid, but its CLI drives headless Chromium), or
-  [Graphviz](https://graphviz.org/) (tiny and instant; flowcharts only).
-  `surveyor-engine` defaults to `auto`: first installed of d2 → mermaid → dot.
-- **Grounded prompts:** file-scope prompts include the imenu symbol list as
-  ground truth, so the LLM labels nodes with names that actually exist.
-- **Repair loop:** invalid Mermaid is rendered anyway, and the renderer error
-  is fed back to the LLM for a corrected attempt
-  (`surveyor-max-repair-attempts`).
-- **View buffer:** `g` regenerate, `s` show Mermaid source, `w` copy source,
-  `q` quit.
+- **Pluggable engines:**
+  -  [D2](https://d2lang.com/) (single Go binary, instant renders)
+  - [Mermaid](https://mermaid.js.org/) (best LLM fluency, pairs with
+     ob-mermaid, but its CLI drives headless Chromium)
+  - [Graphviz](https://graphviz.org/) (tiny and instant; flowcharts only).
+  -  `surveyor-engine` defaults to `auto`: first installed of d2 → mermaid →
+     dot.
+- **imenu integration:** the LLM labels nodes with names from the imenu symbol
+  list.
+- **Repair loop:** invalid Mermaid is rendered anyway, and the renderer error is
+  fed back to the LLM for a corrected attempt (`surveyor-max-repair-attempts`).
+- **View buffer:** `g` regenerate, `s` show Mermaid source, `w` copy source, `q`
+  quit.
 
 ## Requirements
 
 - Emacs 29.1+
-- [gptel](https://github.com/karthink/gptel), configured with a backend
+- [gptel](https://github.com/karthink/gptel), configured with a backend (see
+  below).
 - At least one diagram engine:
-  - **d2** — `brew install d2` (recommended: fast, no browser)
-  - **mermaid** — `npm install -g @mermaid-js/mermaid-cli` for `mmdc`;
-    pulls in headless Chromium via puppeteer. Setting `surveyor-engine`
-    to `mermaid` explicitly also enables an `npx -y @mermaid-js/mermaid-cli`
-    fallback (`auto` never uses npx, since its first run downloads
-    Chromium unprompted)
-  - **dot** — `brew install graphviz`
+  - **d2:** `brew install d2` (recommended: fast, no browser)
+  - **mermaid:** `npm install -g @mermaid-js/mermaid-cli` for `mmdc`; pulls in
+    headless Chromium via puppeteer.
+  - **dot:** `brew install graphviz`
 
 ## Installation
 
@@ -60,7 +59,8 @@ user-error: No ‘gptel-api-key’ found in the auth source
 ```
 
 gptel is using its default backend (OpenAI/ChatGPT) and looking for a key in
-your auth-source (`~/.authinfo`). Either provide that key:
+your auth-source (`~/.authinfo`).  Either provide that key, replacing
+`sk-your-key-here`:
 
 ```
 machine api.openai.com login apikey password sk-your-key-here
@@ -74,17 +74,7 @@ or configure a different backend. Anthropic example:
 (setq gptel-model 'claude-opus-4-8
       gptel-backend (gptel-make-anthropic "Claude"
                       :stream t
-                      :key gptel-api-key-from-auth-source))
-```
-
-Local model via Ollama (no key needed):
-
-```elisp
-(setq gptel-model 'llama3.1
-      gptel-backend (gptel-make-ollama "Ollama"
-                      :host "localhost:11434"
-                      :stream t
-                      :models '(llama3.1)))
+                      :key #'gptel-api-key-from-auth-source))
 ```
 
 See the [gptel README](https://github.com/karthink/gptel#setup) for all
@@ -119,23 +109,22 @@ alist entirely.
 
 ## Customization
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `surveyor-engine` | `auto` | Diagram engine: `auto`, `d2`, `mermaid`, `dot` |
-| `surveyor-d2-command` | `"d2"` | D2 executable |
-| `surveyor-mmdc-command` | `"mmdc"` | Mermaid CLI executable |
-| `surveyor-dot-command` | `"dot"` | Graphviz executable |
-| `surveyor-max-repair-attempts` | `2` | LLM repair rounds for invalid source |
-| `surveyor-image-scale` | `2` | Mermaid render scale (HiDPI crispness) |
-| `surveyor-max-code-chars` | `100000` | Code truncation limit in prompts |
-| `surveyor-display-action` | `nil` | Override `display-buffer` action |
+| Variable                       | Default  | Purpose                                        |
+|--------------------------------|----------|------------------------------------------------|
+| `surveyor-engine`              | `auto`   | Diagram engine: `auto`, `d2`, `mermaid`, `dot` |
+| `surveyor-d2-command`          | `"d2"`   | D2 executable                                  |
+| `surveyor-mmdc-command`        | `"mmdc"` | Mermaid CLI executable                         |
+| `surveyor-dot-command`         | `"dot"`  | Graphviz executable                            |
+| `surveyor-max-repair-attempts` | `2`      | LLM repair rounds for invalid source           |
+| `surveyor-image-scale`         | `2`      | Mermaid render scale (HiDPI crispness)         |
+| `surveyor-max-code-chars`      | `100000` | Code truncation limit in prompts               |
+| `surveyor-display-action`      | `nil`    | Override `display-buffer` action               |
 
 ## Roadmap
 
-- Tree-sitter grounding: prefer `treesit-defun-at-point` /
-  `treesit-defun-name` over `bounds-of-thing-at-point` + `add-log-current-defun`
-  in tree-sitter modes — crisper bounds and names for nested functions and
-  methods with receivers
+- Tree-sitter grounding: prefer `treesit-defun-at-point` / `treesit-defun-name`
+  over `bounds-of-thing-at-point` + `add-log-current-defun` in tree-sitter
+  modes.
 - Transient entry menu (scope × kind × destination)
 - Directory/project scope (dependency and C4 architecture diagrams)
 - Org destination: insert a `#+begin_src` block instead of an image

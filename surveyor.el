@@ -26,12 +26,13 @@
 
 ;;; Commentary:
 
-;; Surveyor generates diagrams of the code you are looking at, using your
-;; configured LLM (via gptel).  Pick a scope (defun or file) and a diagram
-;; kind (flowchart, sequence, class); Surveyor grounds the prompt in
-;; structural facts (imenu symbols), asks the LLM for diagram source,
-;; validates it by actually rendering it, feeds renderer errors back to
-;; the LLM for automatic repair, and displays the image in a view buffer.
+;; Survey your code: LLM-generated diagrams of the defun or file at
+;; point,rendered inline in Emacs.
+;;
+;; Surveyor asks your configured LLM (via gptel) for a diagram of the code you
+;; are looking at, validates the result by actually rendering it, feeds renderer
+;; errors back to the LLM for automatic repair, and shows the image in a view
+;; buffer.
 ;;
 ;; Diagrams are produced by a pluggable engine (`surveyor-engine'):
 ;;
@@ -41,23 +42,12 @@
 ;; - `dot': Graphviz, tiny and fast, but flowcharts only.
 ;;
 ;; The default `auto' picks the first engine whose binary is installed,
-;; in the order d2, mermaid, dot.  Setting `surveyor-engine' to
-;; `mermaid' explicitly also enables an npx fallback when `mmdc' is
-;; missing; `auto' never does, because that first npx run downloads
-;; headless Chromium.
+;; in the order d2, mermaid, dot.
 ;;
 ;; Entry points: `surveyor-defun' and `surveyor-file'.
 ;;
-;; In the view buffer: `g' regenerates, `s' shows the diagram source,
+;; In the rendered view buffer: `g' regenerates, `s' shows the diagram source,
 ;; `w' copies it, `q' quits.
-;;
-;; Window placement respects `display-buffer-alist'.  Match on
-;; (category . surveyor) on Emacs 30+, on the buffer name prefix
-;; "*surveyor", or on `surveyor-view-mode'; or set
-;; `surveyor-display-action' to bypass the alist entirely.
-;;
-;; The render step is synchronous (milliseconds for d2/dot, a few
-;; seconds for mermaid); the LLM request is asynchronous.
 
 ;;; Code:
 
