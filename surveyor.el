@@ -392,6 +392,7 @@ Return (:file FILE) on success or (:error STRING) on failure."
   "s" #'surveyor-show-source
   "w" #'surveyor-copy-source
   "S" #'surveyor-save-image
+  "E" #'surveyor-open-externally
   "+" #'surveyor-zoom-in
   "=" #'surveyor-zoom-in
   "-" #'surveyor-zoom-out
@@ -419,6 +420,7 @@ scrolling, zooming -- is `image-mode's.
                    "  \\[surveyor-show-source] source"
                    "  \\[surveyor-copy-source] copy"
                    "  \\[surveyor-save-image] save"
+                   "  \\[surveyor-open-externally] open"
                    "  \\[surveyor-zoom-in]/\\[surveyor-zoom-out] zoom"
                    "  \\[image-transform-fit-to-window] refit"
                    "  \\[quit-window] quit")))))
@@ -518,6 +520,22 @@ Return the window showing it."
     (user-error "No diagram source in this buffer"))
   (kill-new surveyor--source)
   (message "Copied diagram source"))
+
+(declare-function w32-shell-execute "w32fns.c")
+
+(defun surveyor-open-externally ()
+  "Open the rendered diagram with the system's default application.
+Like `dired-do-open' (bound to \\`E' in Dired), but without Emacs
+30's `shell-command-guess-open'."
+  (interactive nil surveyor-diagram-mode)
+  (unless surveyor--file
+    (user-error "No diagram in this buffer"))
+  (pcase system-type
+    ('darwin (call-process "open" nil 0 nil surveyor--file))
+    ('windows-nt (w32-shell-execute "open" surveyor--file))
+    ((guard (executable-find "xdg-open"))
+     (call-process "xdg-open" nil 0 nil surveyor--file))
+    (_ (browse-url-of-file surveyor--file))))
 
 (defun surveyor--save-default-name ()
   "Default file name for saving this buffer's diagram image."

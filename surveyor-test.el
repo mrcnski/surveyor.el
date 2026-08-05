@@ -155,7 +155,7 @@
     (surveyor-diagram-mode 1)
     (should (stringp header-line-format))
     (dolist (part '("g regenerate" "s source" "w copy" "S save"
-                    "zoom" "0 refit" "q quit"))
+                    "E open" "zoom" "0 refit" "q quit"))
       (should (string-search part header-line-format)))))
 
 (provide 'surveyor-test)

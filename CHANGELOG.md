@@ -19,5 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - View buffer built on `image-mode`: fit-to-window display, smooth
   scrolling, and zoom.
 - Header line listing the view-buffer keys.
+- `surveyor-open-externally` (`E`): open the rendered image in the
+  system's default application.
 - Window placement via `display-buffer-alist`: action category `surveyor` (Emacs
   30+), buffer name prefix `*surveyor`, or `surveyor-display-action` override.
