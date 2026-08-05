@@ -134,17 +134,6 @@
     (let ((surveyor-engine 'mermaid))
       (should (eq (car (surveyor--resolve-engine)) 'mermaid)))))
 
-;;;; Image fitting
-
-(ert-deftest surveyor-fit-scale-shrinks-large-image ()
-  (should (= (surveyor--fit-scale '(2000 . 1000) 1000 1000) 0.5)))
-
-(ert-deftest surveyor-fit-scale-bounded-by-height ()
-  (should (= (surveyor--fit-scale '(100 . 400) 1000 200) 0.5)))
-
-(ert-deftest surveyor-fit-scale-never-upscales ()
-  (should (= (surveyor--fit-scale '(100 . 50) 1000 1000) 1.0)))
-
 (ert-deftest surveyor-system-prompt-uses-fence ()
   (should (string-match-p "```d2"
                           (surveyor--system-prompt
@@ -160,10 +149,10 @@
     (should (equal (surveyor--save-default-name)
                    "foo-bar-baz.el-flowchart.svg"))))
 
-(ert-deftest surveyor-view-mode-header-line ()
-  "The view mode advertises its keys in the header line."
+(ert-deftest surveyor-diagram-mode-header-line ()
+  "The diagram minor mode advertises its keys in the header line."
   (with-temp-buffer
-    (surveyor-view-mode)
+    (surveyor-diagram-mode 1)
     (should (stringp header-line-format))
     (dolist (part '("g regenerate" "s source" "w copy" "S save"
                     "zoom" "0 refit" "q quit"))

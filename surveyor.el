@@ -26,8 +26,7 @@
 
 ;;; Commentary:
 
-;; Survey your code: LLM-generated diagrams of the defun or file at
-;; point,rendered inline in Emacs.
+;; Survey your code: LLM-generated diagrams of code, rendered inline in Emacs.
 ;;
 ;; Surveyor asks your configured LLM (via gptel) for a diagram of the code you
 ;; are looking at, validates the result by actually rendering it, feeds renderer
@@ -46,14 +45,16 @@
 ;;
 ;; Entry points: `surveyor-defun' and `surveyor-file'.
 ;;
-;; In the rendered view buffer, the diagram is scaled to fit the window, with
-;; the available keys in the header line.
+;; The rendered diagram is shown in an `image-mode' buffer (fit to window,
+;; smooth scrolling, zoom) with surveyor keys on top, listed in the header
+;; line.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'imenu)
 (require 'add-log)
+(require 'image-mode)
 (require 'gptel)
 
 (defgroup surveyor nil
@@ -386,11 +387,7 @@ Return (:file FILE) on success or (:error STRING) on failure."
 (defvar-local surveyor--file nil
   "Rendered image file shown in this view buffer.")
 
-(defvar-local surveyor--zoom 1.0
-  "Zoom factor relative to the fit-to-window size.")
-
-(defvar-keymap surveyor-view-mode-map
-  :parent special-mode-map
+(defvar-keymap surveyor-diagram-mode-map
   "g" #'surveyor-regenerate
   "s" #'surveyor-show-source
   "w" #'surveyor-copy-source
@@ -398,21 +395,70 @@ Return (:file FILE) on success or (:error STRING) on failure."
   "+" #'surveyor-zoom-in
   "=" #'surveyor-zoom-in
   "-" #'surveyor-zoom-out
-  "0" #'surveyor-zoom-reset)
+  "0" #'image-transform-fit-to-window
+  "q" #'quit-window
+  ;; `image-mode' remaps the keyboard scroll commands to clamped,
+  ;; pixel-precise variants, but wheel events go through `mwheel-scroll'
+  ;; and plain `scroll-up'/`scroll-down', which jump past the image.
+  "<wheel-down>" #'surveyor-wheel-down
+  "<wheel-up>" #'surveyor-wheel-up
+  "<wheel-right>" #'surveyor-wheel-right
+  "<wheel-left>" #'surveyor-wheel-left)
 
-(define-derived-mode surveyor-view-mode special-mode "Surveyor"
-  "Major mode for viewing surveyor diagrams."
-  (setq-local cursor-type nil)
-  (setq-local header-line-format
-              (substitute-command-keys
-               (concat "\\<surveyor-view-mode-map>"
-                       "\\[surveyor-regenerate] regenerate"
-                       "  \\[surveyor-show-source] source"
-                       "  \\[surveyor-copy-source] copy"
-                       "  \\[surveyor-save-image] save"
-                       "  \\[surveyor-zoom-in]/\\[surveyor-zoom-out] zoom"
-                       "  \\[surveyor-zoom-reset] refit"
-                       "  \\[quit-window] quit"))))
+(define-minor-mode surveyor-diagram-mode
+  "Surveyor commands on top of `image-mode' in diagram view buffers.
+The heavy lifting -- fitting the image to the window, pixel-precise
+scrolling, zooming -- is `image-mode's.
+\\{surveyor-diagram-mode-map}"
+  :interactive nil
+  (when surveyor-diagram-mode
+    (setq header-line-format
+          (substitute-command-keys
+           (concat "\\<surveyor-diagram-mode-map>"
+                   "\\[surveyor-regenerate] regenerate"
+                   "  \\[surveyor-show-source] source"
+                   "  \\[surveyor-copy-source] copy"
+                   "  \\[surveyor-save-image] save"
+                   "  \\[surveyor-zoom-in]/\\[surveyor-zoom-out] zoom"
+                   "  \\[image-transform-fit-to-window] refit"
+                   "  \\[quit-window] quit")))))
+
+(defun surveyor-zoom-in ()
+  "Enlarge the diagram.
+`image-increase-size' looks the image up at point (deferred to a
+timer), but point in an `image-mode' data buffer is not reliably on
+the image text; anchor the lookup at `point-min', where the image's
+display property starts.  Moving point there also keeps the
+transient repeat map (`+ + ...') working."
+  (interactive nil surveyor-diagram-mode)
+  (goto-char (point-min))
+  (image-increase-size nil (point-min-marker)))
+
+(defun surveyor-zoom-out ()
+  "Shrink the diagram."
+  (interactive nil surveyor-diagram-mode)
+  (goto-char (point-min))
+  (image-decrease-size nil (point-min-marker)))
+
+(defun surveyor-wheel-down ()
+  "Scroll the diagram a step down."
+  (interactive nil surveyor-diagram-mode)
+  (image-scroll-up 2))
+
+(defun surveyor-wheel-up ()
+  "Scroll the diagram a step up."
+  (interactive nil surveyor-diagram-mode)
+  (image-scroll-down 2))
+
+(defun surveyor-wheel-right ()
+  "Scroll the diagram a step to the right."
+  (interactive nil surveyor-diagram-mode)
+  (image-forward-hscroll 2))
+
+(defun surveyor-wheel-left ()
+  "Scroll the diagram a step to the left."
+  (interactive nil surveyor-diagram-mode)
+  (image-backward-hscroll 2))
 
 (defun surveyor--display (buffer)
   "Display BUFFER according to the user's display configuration.
@@ -420,81 +466,39 @@ Return the window showing it."
   (display-buffer buffer (or surveyor-display-action
                              '(nil (category . surveyor)))))
 
-(defun surveyor--fit-scale (native window-width window-height)
-  "Return the scale fitting NATIVE (WIDTH . HEIGHT) into the window body.
-WINDOW-WIDTH and WINDOW-HEIGHT are in pixels.  Images smaller than
-the window are not scaled up."
-  (min 1.0
-       (/ (float window-width) (max 1 (car native)))
-       (/ (float window-height) (max 1 (cdr native)))))
-
-(defun surveyor--image (window)
-  "Create the diagram image for WINDOW at the current zoom."
-  (let* ((native (image-size (create-image surveyor--file nil nil :scale 1) t))
-         (fit (surveyor--fit-scale native
-                                   (window-body-width window t)
-                                   (window-body-height window t))))
-    (create-image surveyor--file nil nil :scale (* fit surveyor--zoom))))
-
-(defun surveyor--refresh (&optional window)
-  "Redraw the diagram at the current zoom, fitted to WINDOW."
-  (unless surveyor--file
-    (user-error "No diagram in this buffer"))
-  (let ((window (or window
-                    (get-buffer-window (current-buffer))
-                    (selected-window)))
-        (inhibit-read-only t))
-    (erase-buffer)
-    (insert-image (surveyor--image window))
-    (insert "\n")
-    (goto-char (point-min))))
-
 (defun surveyor--show (context source file)
   "Show the diagram in FILE for CONTEXT, remembering SOURCE."
   (let ((buffer (get-buffer-create (format "*surveyor: %s (%s)*"
                                            (plist-get context :name)
                                            (plist-get context :kind)))))
     (with-current-buffer buffer
-      (unless (derived-mode-p 'surveyor-view-mode)
-        (surveyor-view-mode))
+      (let ((inhibit-read-only t)
+            (buffer-undo-list t))
+        (erase-buffer)
+        (set-buffer-multibyte nil)
+        (insert-file-contents-literally file)))
+    ;; Display before enabling `image-mode', which fits the image to
+    ;; the window the buffer is shown in.
+    (surveyor--display buffer)
+    (with-current-buffer buffer
+      (image-mode)
+      (surveyor-diagram-mode 1)
+      (goto-char (point-min))
+      ;; After `image-mode': changing the major mode kills buffer-locals.
       (setq surveyor--source source
             surveyor--context context
-            surveyor--file file
-            surveyor--zoom 1.0))
-    ;; Display first: fit-to-window needs the real window size, which
-    ;; `display-buffer-alist' side-window entries and the like decide.
-    (let ((window (surveyor--display buffer)))
-      (with-current-buffer buffer
-        (surveyor--refresh window)))))
-
-(defun surveyor-zoom-in ()
-  "Enlarge the diagram."
-  (interactive nil surveyor-view-mode)
-  (setq surveyor--zoom (* surveyor--zoom 1.25))
-  (surveyor--refresh))
-
-(defun surveyor-zoom-out ()
-  "Shrink the diagram."
-  (interactive nil surveyor-view-mode)
-  (setq surveyor--zoom (/ surveyor--zoom 1.25))
-  (surveyor--refresh))
-
-(defun surveyor-zoom-reset ()
-  "Fit the diagram to the window."
-  (interactive nil surveyor-view-mode)
-  (setq surveyor--zoom 1.0)
-  (surveyor--refresh))
+            surveyor--file file))))
 
 (defun surveyor-regenerate ()
   "Regenerate this diagram with a fresh LLM request."
-  (interactive nil surveyor-view-mode)
+  (interactive nil surveyor-diagram-mode)
   (unless surveyor--context
     (user-error "No diagram context in this buffer"))
   (surveyor--start surveyor--context))
 
 (defun surveyor-show-source ()
   "Show the source of this diagram."
-  (interactive nil surveyor-view-mode)
+  (interactive nil surveyor-diagram-mode)
   (unless surveyor--source
     (user-error "No diagram source in this buffer"))
   (let ((buffer (get-buffer-create "*surveyor-source*"))
@@ -509,7 +513,7 @@ the window are not scaled up."
 
 (defun surveyor-copy-source ()
   "Copy the source of this diagram to the kill ring."
-  (interactive nil surveyor-view-mode)
+  (interactive nil surveyor-diagram-mode)
   (unless surveyor--source
     (user-error "No diagram source in this buffer"))
   (kill-new surveyor--source)
@@ -531,7 +535,7 @@ the window are not scaled up."
        (user-error "No diagram in this buffer"))
      (list (read-file-name "Save diagram to: " nil nil nil
                            (surveyor--save-default-name))))
-   surveyor-view-mode)
+   surveyor-diagram-mode)
   (copy-file surveyor--file file 1)
   (message "Saved diagram to %s" file))
 

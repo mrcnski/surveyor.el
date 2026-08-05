@@ -1,7 +1,6 @@
 # surveyor.el
 
-Survey your code: LLM-generated diagrams of the defun or file at point,
-rendered inline in Emacs.
+Survey your code: LLM-generated diagrams of code, rendered inline in Emacs.
 
 Surveyor asks your configured LLM (via [gptel](https://github.com/karthink/gptel))
 for a diagram of the code you are looking at, validates the result by
@@ -25,8 +24,7 @@ repair, and shows the image in a view buffer.
   list.
 - **Repair loop:** invalid Mermaid is rendered anyway, and the renderer error is
   fed back to the LLM for a corrected attempt (`surveyor-max-repair-attempts`).
-- **View buffer:** the diagram is scaled to fit the window, with the available
-  keys in the header line.
+- **View buffer:** built on `image-mode`.  Hotkeys listed in the header line.
 
 ## Requirements
 
