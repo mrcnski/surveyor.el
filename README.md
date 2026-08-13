@@ -1,29 +1,26 @@
 # surveyor.el
 
-Survey your code: LLM-generated diagrams of code, rendered inline in Emacs.
+Survey your code: LLM-generated diagrams of code, rendered in Emacs!
 
-Surveyor asks your configured LLM (via [gptel](https://github.com/karthink/gptel))
-for a diagram of the code you are looking at, validates the result by
-actually rendering it, feeds renderer errors back to the LLM for automatic
+Surveyor asks your configured LLM (via
+[gptel](https://github.com/karthink/gptel)) for a diagram of the code you are
+looking at, renders it, feeds renderer errors back to the LLM for automatic
 repair, and shows the image in a view buffer.
-
-**Status: early WIP.**
 
 ## Features
 
-- **Scopes:** defun at point (`surveyor-defun`) or whole file (`surveyor-file`).
-- **Kinds:** control-flow `flowchart`, `sequence` diagram, `class` diagram.
+- **Scopes:** defun at point or whole file.
+- **Kinds of diagrams:** supports flowcharts, sequence diagrams, and class diagrams.
 - **Pluggable engines:**
   -  [D2](https://d2lang.com/) (single Go binary, instant renders)
-  - [Mermaid](https://mermaid.js.org/) (best LLM fluency, pairs with
-     ob-mermaid, but its CLI drives headless Chromium)
-  - [Graphviz](https://graphviz.org/) (tiny and instant; flowcharts only).
+  - [Mermaid](https://mermaid.js.org/) (best LLM fluency)
+  - [Graphviz](https://graphviz.org/) (tiny and instant, flowcharts only).
   -  `surveyor-engine` defaults to `auto`: first installed of d2 → mermaid →
      dot.
 - **imenu integration:** the LLM labels nodes with names from the imenu symbol
   list.
-- **Repair loop:** invalid Mermaid is rendered anyway, and the renderer error is
-  fed back to the LLM for a corrected attempt (`surveyor-max-repair-attempts`).
+- **Repair loop:** surveyor attempts to render invalid Mermaid, and the renderer
+  error is fed back to the LLM for a corrected attempt.
 - **View buffer:** built on `image-mode`.  Hotkeys listed in the header line.
 
 ## Requirements
@@ -76,7 +73,7 @@ or configure a different backend. Anthropic example:
 ```
 
 See the [gptel README](https://github.com/karthink/gptel#setup) for all
-supported backends (OpenAI, Anthropic, Gemini, Ollama, llama.cpp, and more).
+supported backends.
 
 ## Usage
 
