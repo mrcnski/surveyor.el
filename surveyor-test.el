@@ -134,7 +134,17 @@
 
 (ert-deftest surveyor-menu-covers-all-kinds-and-engines ()
   (should (equal (surveyor--all-kinds) '("flowchart" "sequence" "class")))
-  (should (equal (surveyor--engine-names) '("auto" "d2" "mermaid" "dot"))))
+  (should (equal (surveyor--engine-names) '("auto" "d2" "mermaid" "dot")))
+  (should (equal (surveyor--level-names) '("code" "logical"))))
+
+(ert-deftest surveyor-save-default-name-includes-level ()
+  "A logical diagram saves under a name distinct from the code one."
+  (with-temp-buffer
+    (setq-local surveyor--context '(:name "foo.el" :kind flowchart
+                                          :level logical)
+                surveyor--file "/tmp/surveyor-abc123.svg")
+    (should (equal (surveyor--save-default-name)
+                   "foo.el-logical-flowchart.svg"))))
 
 (ert-deftest surveyor-run-rejects-unsupported-kind ()
   "A menu kind the resolved engine cannot draw signals a user-error."
@@ -154,7 +164,89 @@
 (ert-deftest surveyor-system-prompt-uses-fence ()
   (should (string-match-p "```d2"
                           (surveyor--system-prompt
-                           (surveyor-test--engine 'd2)))))
+                           (surveyor-test--engine 'd2)
+                           (surveyor--level 'code)))))
+
+;;;; Levels
+
+(ert-deftest surveyor-levels-well-formed ()
+  "Every level has a node budget and a naming rule."
+  (dolist (entry surveyor-levels)
+    (let ((level (cdr entry)))
+      (should (natnump (plist-get level :nodes)))
+      (should (stringp (plist-get level :naming))))))
+
+(ert-deftest surveyor-level-defaults-to-code ()
+  (should (eq surveyor-level 'code))
+  (should (equal (surveyor--level nil) (surveyor--level 'code)))
+  (should-not (surveyor--level 'nonesuch)))
+
+(ert-deftest surveyor-level-default-is-configurable ()
+  "`surveyor-level' drives both the fallback and the name qualification."
+  (let ((surveyor-level 'logical))
+    (should (equal (surveyor--level nil) (surveyor--level 'logical)))
+    ;; With `logical' as the default it is the unmarked case, and `code' is not.
+    (should (equal (surveyor--kind-label '(:kind flowchart :level logical))
+                   "flowchart"))
+    (should (equal (surveyor--kind-label '(:kind flowchart :level code))
+                   "code flowchart")))
+  ;; Every offered level is a valid customize choice.
+  (let ((choices (cdr (get 'surveyor-level 'custom-type))))
+    (should (equal (sort (mapcar (lambda (c) (car (last c))) choices) #'string<)
+                   (sort (mapcar #'car surveyor-levels) #'string<)))))
+
+(ert-deftest surveyor-code-level-prompts-unchanged ()
+  "The `code' level reproduces the original, pre-level prompts exactly."
+  (let* ((engine (surveyor-test--engine 'mermaid))
+         (context (list :kind 'flowchart :code "(defun f () 1)"
+                        :symbols '("f") :mode 'emacs-lisp-mode :level 'code))
+         (system (surveyor--system-prompt engine (surveyor--level 'code))))
+    ;; No level instruction is added.
+    (should (equal (surveyor--build-prompt context engine)
+                   (concat
+                    (format "Diagram kind: flowchart.  %s\n\n"
+                            (alist-get 'flowchart (plist-get engine :kinds)))
+                    "Definitions in this file (ground truth, from imenu):\n"
+                    "- f\n\n"
+                    "Language: emacs-lisp-mode\n\n"
+                    "Source:\n```\n(defun f () 1)\n```\n")))
+    (should (string-match-p "use their real names as labels" system))
+    (should (string-match-p "at most about 25 nodes" system))))
+
+(ert-deftest surveyor-logical-level-relaxes-naming-and-budget ()
+  "The logical level drops the real-names rule and tightens the node budget."
+  (let ((system (surveyor--system-prompt (surveyor-test--engine 'mermaid)
+                                         (surveyor--level 'logical))))
+    (should-not (string-match-p "use their real names as labels" system))
+    (should (string-match-p "problem domain" system))
+    (should (string-match-p "at most about 12 nodes" system))))
+
+(ert-deftest surveyor-logical-level-adds-instruction ()
+  "The logical level adds guidance the code level does not."
+  (let* ((context (list :kind 'flowchart :code "x" :symbols nil
+                        :mode 'text-mode))
+         (engine (surveyor-test--engine 'mermaid))
+         (code (surveyor--build-prompt context engine))
+         (logical (surveyor--build-prompt
+                   (append context '(:level logical)) engine)))
+    (should (string-match-p "at a high level" logical))
+    (should-not (string-match-p "at a high level" code))
+    ;; Both still carry the kind instruction and the source.
+    (should (string-match-p "Diagram kind: flowchart" logical))))
+
+(ert-deftest surveyor-kind-label-qualifies-non-default-level ()
+  "Only a non-default level shows up in buffer and file names."
+  (should (equal (surveyor--kind-label '(:kind flowchart)) "flowchart"))
+  (should (equal (surveyor--kind-label '(:kind flowchart :level code))
+                 "flowchart"))
+  (should (equal (surveyor--kind-label '(:kind flowchart :level logical))
+                 "logical flowchart")))
+
+(ert-deftest surveyor-run-rejects-unknown-level ()
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (cmd) (when (equal cmd "d2") "/usr/local/bin/d2"))))
+    (should-error (surveyor--run #'ignore 'flowchart 'd2 'nonesuch)
+                  :type 'user-error)))
 
 ;;;; View buffer
 

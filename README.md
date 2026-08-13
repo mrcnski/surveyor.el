@@ -10,7 +10,10 @@ repair, and shows the image in a view buffer.
 ## Features
 
 - **Scopes:** defun at point or whole file.
-- **Kinds of diagrams:** supports flowcharts, sequence diagrams, and class diagrams.
+- **Kinds of diagrams:** supports flowcharts, sequence diagrams, and class
+  diagrams.
+- **Abstraction levels:** `code` (uses code symbols) and `logical` (uses plain
+  English).
 - **Pluggable engines:**
   -  [D2](https://d2lang.com/) (single Go binary, instant renders)
   - [Mermaid](https://mermaid.js.org/) (best LLM fluency)
@@ -107,6 +110,7 @@ alist entirely.
 | Variable                       | Default  | Purpose                                        |
 |--------------------------------|----------|------------------------------------------------|
 | `surveyor-engine`              | `auto`   | Diagram engine: `auto`, `d2`, `mermaid`, `dot` |
+| `surveyor-level`               | `code`   | Default abstraction level: `code`, `logical`   |
 | `surveyor-d2-command`          | `"d2"`   | D2 executable                                  |
 | `surveyor-mmdc-command`        | `"mmdc"` | Mermaid CLI executable                         |
 | `surveyor-dot-command`         | `"dot"`  | Graphviz executable                            |
