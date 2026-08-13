@@ -142,6 +142,15 @@ alist entirely.
 - PlantUML engine
 - Kroki fallback for rendering without a local toolchain
 
+## Related projects
+
+- [promptu](https://github.com/mrcnski/promptu.el): generate LLM prompts using
+  customizable building blocks.
+- [context-clues](https://github.com/mrcnski/context-clues): a transient menu
+  for copying file, buffer, and code context to paste into LLMs.
+- [surveyor](https://github.com/mrcnski/surveyor.el): oh wait, you're here
+  already.
+
 ## License
 
 GPL-3.0. See [LICENSE](LICENSE).
