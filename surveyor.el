@@ -5,7 +5,7 @@
 ;; Author: Marcin Swieczkowski <marcin@realemail.net>
 ;; Assisted-by: Claude:claude-fable-5
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (gptel "0.9.0"))
+;; Package-Requires: ((emacs "29.1") (gptel "0.9.0") (transient "0.4.0"))
 ;; Keywords: convenience, tools, docs
 ;; URL: https://github.com/mrcnski/surveyor.el
 
@@ -43,7 +43,7 @@
 ;; The default `auto' picks the first engine whose binary is installed,
 ;; in the order d2, mermaid, dot.
 ;;
-;; Entry points: `surveyor-defun' and `surveyor-file'.
+;; Entry points: `surveyor' (or the standalone commands).
 ;;
 ;; The rendered diagram is shown in an `image-mode' buffer (fit to window,
 ;; smooth scrolling, zoom) with surveyor keys on top, listed in the header
@@ -55,6 +55,7 @@
 (require 'imenu)
 (require 'add-log)
 (require 'image-mode)
+(require 'transient)
 (require 'gptel)
 
 (defgroup surveyor nil
@@ -572,12 +573,19 @@ Like `dired-do-open' (bound to \\`E' in Dired), but without Emacs
   (let ((engine (alist-get (plist-get context :engine) surveyor-engines)))
     (surveyor--request context (surveyor--build-prompt context engine) 0)))
 
-(defun surveyor--run (context-fn)
-  "Resolve engine and kind, then generate from CONTEXT-FN's context."
-  (pcase-let* ((`(,engine-name . ,engine) (surveyor--resolve-engine))
-               (kind (surveyor--read-kind engine)))
-    (surveyor--start (append (list :kind kind :engine engine-name)
-                             (funcall context-fn)))))
+(defun surveyor--run (context-fn &optional kind engine-name)
+  "Resolve engine and kind, then generate from CONTEXT-FN's context.
+When ENGINE-NAME is non-nil it is used as `surveyor-engine'.  When KIND
+is nil it is read interactively."
+  (let ((surveyor-engine (or engine-name surveyor-engine)))
+    (pcase-let* ((`(,resolved . ,engine) (surveyor--resolve-engine))
+                 (kind (or kind (surveyor--read-kind engine))))
+      (unless (alist-get kind (plist-get engine :kinds))
+        (user-error "Engine %s only supports %s diagrams" resolved
+                    (mapconcat (lambda (k) (symbol-name (car k)))
+                               (plist-get engine :kinds) ", ")))
+      (surveyor--start (append (list :kind kind :engine resolved)
+                               (funcall context-fn))))))
 
 ;;;###autoload
 (defun surveyor-defun ()
@@ -590,6 +598,57 @@ Like `dired-do-open' (bound to \\`E' in Dired), but without Emacs
   "Generate a diagram of the current file."
   (interactive)
   (surveyor--run #'surveyor--file-context))
+
+;;;; Transient menu
+
+(defun surveyor--all-kinds ()
+  "Return the diagram kind names supported by any engine."
+  (let (kinds)
+    (dolist (entry surveyor-engines (nreverse kinds))
+      (dolist (kind (plist-get (cdr entry) :kinds))
+        (let ((name (symbol-name (car kind))))
+          (unless (member name kinds)
+            (push name kinds)))))))
+
+(defun surveyor--engine-names ()
+  "Return the engine choices for the menu, including \"auto\"."
+  (cons "auto" (mapcar (lambda (entry) (symbol-name (car entry)))
+                       surveyor-engines)))
+
+(defun surveyor--menu-arg (args key)
+  "Return the value of the KEY= argument in ARGS, or nil."
+  (when-let* ((match (seq-find (lambda (arg) (string-prefix-p key arg)) args)))
+    (substring match (length key))))
+
+(defun surveyor--menu-run (context-fn)
+  "Generate from CONTEXT-FN with the kind and engine chosen in the menu."
+  (let* ((args (transient-args 'surveyor))
+         (kind (surveyor--menu-arg args "--kind="))
+         (engine (surveyor--menu-arg args "--engine=")))
+    (surveyor--run context-fn
+                   (and kind (intern kind))
+                   (and engine (not (equal engine "auto")) (intern engine)))))
+
+(defun surveyor-generate-defun ()
+  "Generate the diagram selected in the menu for the defun at point."
+  (interactive)
+  (surveyor--menu-run #'surveyor--defun-context))
+
+(defun surveyor-generate-file ()
+  "Generate the diagram selected in the menu for the current file."
+  (interactive)
+  (surveyor--menu-run #'surveyor--file-context))
+
+;;;###autoload (autoload 'surveyor "surveyor" nil t)
+(transient-define-prefix surveyor ()
+  "Generate an LLM diagram of the code at hand."
+  :value '("--kind=flowchart")
+  ["Options"
+   ("k" "Diagram kind" "--kind=" :choices surveyor--all-kinds)
+   ("e" "Engine" "--engine=" :choices surveyor--engine-names)]
+  ["Generate"
+   ("d" "Defun at point" surveyor-generate-defun)
+   ("f" "Whole file" surveyor-generate-file)])
 
 (provide 'surveyor)
 ;;; surveyor.el ends here

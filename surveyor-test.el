@@ -125,6 +125,23 @@
              (lambda (cmd) (when (equal cmd "mmdc") "/usr/local/bin/mmdc"))))
     (should (equal (surveyor--mermaid-program) '("mmdc")))))
 
+(ert-deftest surveyor-menu-arg ()
+  "Extracts a transient argument value by key prefix."
+  (should (equal (surveyor--menu-arg '("--kind=sequence" "--engine=d2")
+                                     "--kind=")
+                 "sequence"))
+  (should-not (surveyor--menu-arg '("--engine=d2") "--kind=")))
+
+(ert-deftest surveyor-menu-covers-all-kinds-and-engines ()
+  (should (equal (surveyor--all-kinds) '("flowchart" "sequence" "class")))
+  (should (equal (surveyor--engine-names) '("auto" "d2" "mermaid" "dot"))))
+
+(ert-deftest surveyor-run-rejects-unsupported-kind ()
+  "A menu kind the resolved engine cannot draw signals a user-error."
+  (cl-letf (((symbol-function 'executable-find)
+             (lambda (cmd) (when (equal cmd "dot") "/usr/bin/dot"))))
+    (should-error (surveyor--run #'ignore 'class 'dot) :type 'user-error)))
+
 (ert-deftest surveyor-auto-never-picks-npx-mermaid ()
   "With only npx installed, auto errors instead of picking mermaid."
   (cl-letf (((symbol-function 'executable-find)

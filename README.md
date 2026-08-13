@@ -44,7 +44,7 @@ Not yet on MELPA. From a checkout:
 ```elisp
 (use-package surveyor
   :load-path "path/to/surveyor.el"
-  :commands (surveyor-defun surveyor-file))
+  :commands (surveyor surveyor-defun surveyor-file))
 ```
 
 ## Setting up gptel
@@ -80,9 +80,9 @@ supported backends (OpenAI, Anthropic, Gemini, Ollama, llama.cpp, and more).
 
 ## Usage
 
-`M-x surveyor-defun` or `M-x surveyor-file`, pick a diagram kind, wait for
-the render. The LLM request is asynchronous; the render step is synchronous
-and typically takes 1–3 seconds.
+`M-x surveyor` to open a transient menu with available options.
+
+Some standalone commands are also provided.
 
 ## Window placement
 
@@ -123,7 +123,6 @@ alist entirely.
 - Tree-sitter grounding: prefer `treesit-defun-at-point` / `treesit-defun-name`
   over `bounds-of-thing-at-point` + `add-log-current-defun` in tree-sitter
   modes.
-- Transient entry menu (scope × kind × destination)
 - Directory/project scope (dependency and C4 architecture diagrams)
 - Org destination: insert a `#+begin_src` block instead of an image
 - Result caching keyed on (code, kind, engine, prompt version)
