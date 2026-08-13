@@ -77,9 +77,19 @@ the npx cache on first use."
   :type '(choice (const :tag "First available (d2, mermaid, dot)" auto)
                  (const d2) (const mermaid) (const dot)))
 
+(defcustom surveyor-kind 'flowchart
+  "Diagram kind offered by default.
+The menu starts on this kind and prompts offer it as the answer.  An
+engine that cannot draw it falls back to the first kind it supports;
+see `surveyor-engines' for what each engine can draw."
+  :type '(choice (const :tag "Control flow" flowchart)
+                 (const :tag "Message sequence" sequence)
+                 (const :tag "Class relationships" class)))
+
 (defcustom surveyor-level 'code
-  "Abstraction level used when the menu does not choose one.
-See `surveyor-levels' for a description of each level."
+  "Abstraction level offered by default.
+The menu starts on this level and commands fall back to it.  See
+`surveyor-levels' for a description of each level."
   :type '(choice (const :tag "Control flow as written" code)
                  (const :tag "Logical steps only" logical)))
 
@@ -614,11 +624,16 @@ Like `dired-do-open' (bound to \\`E' in Dired), but without Emacs
 ;;;; Entry points
 
 (defun surveyor--read-kind (engine)
-  "Prompt for a diagram kind supported by ENGINE's plist."
+  "Prompt for a diagram kind supported by ENGINE's plist.
+Offer `surveyor-kind' as the answer, or ENGINE's first kind when
+ENGINE cannot draw it."
   (let ((kinds (mapcar #'car (plist-get engine :kinds))))
     (if (cdr kinds)
-        (intern (completing-read "Diagram kind: " kinds nil t nil nil
-                                 (symbol-name (car kinds))))
+        (intern (completing-read
+                 "Diagram kind: " kinds nil t nil nil
+                 (symbol-name (if (memq surveyor-kind kinds)
+                                  surveyor-kind
+                                (car kinds)))))
       (car kinds))))
 
 (defun surveyor--start (context)
@@ -675,6 +690,29 @@ is nil it is read interactively.  LEVEL defaults to `surveyor-level'."
   "Return the abstraction level choices for the menu."
   (mapcar (lambda (entry) (symbol-name (car entry))) surveyor-levels))
 
+(defclass surveyor--choice (transient-option) ()
+  "Menu option that always holds one of a fixed set of choices.")
+
+(cl-defmethod transient-infix-read ((obj surveyor--choice))
+  "Choose one of OBJ's choices, keeping the current value by default.
+The default method unsets an already-set option when its key is
+pressed again, and clears it on empty input.  Neither makes sense for
+options the generate commands always need, so re-read instead, with
+the current value as the completion default."
+  (let ((choices (oref obj choices)))
+    (when (functionp choices)
+      (setq choices (funcall choices)))
+    (completing-read (transient-prompt obj) choices nil t nil nil
+                     (or (oref obj value) (car choices)))))
+
+(defun surveyor--menu-defaults ()
+  "Return one starting argument for every menu option.
+Kind, level, and engine come from the like-named user options, so the
+menu always displays exactly what a generate command will use."
+  (list (format "--kind=%s" surveyor-kind)
+        (format "--level=%s" surveyor-level)
+        (format "--engine=%s" surveyor-engine)))
+
 (defun surveyor--menu-arg (args key)
   "Return the value of the KEY= argument in ARGS, or nil."
   (when-let* ((match (seq-find (lambda (arg) (string-prefix-p key arg)) args)))
@@ -682,14 +720,13 @@ is nil it is read interactively.  LEVEL defaults to `surveyor-level'."
 
 (defun surveyor--menu-run (context-fn)
   "Generate from CONTEXT-FN with the options chosen in the menu."
-  (let* ((args (transient-args 'surveyor))
-         (kind (surveyor--menu-arg args "--kind="))
-         (engine (surveyor--menu-arg args "--engine="))
-         (level (surveyor--menu-arg args "--level=")))
+  (let ((args (transient-args 'surveyor)))
+    ;; `auto' stays `auto': it must auto-detect even when
+    ;; `surveyor-engine' pins a concrete engine.
     (surveyor--run context-fn
-                   (and kind (intern kind))
-                   (and engine (not (equal engine "auto")) (intern engine))
-                   (and level (intern level)))))
+                   (intern (surveyor--menu-arg args "--kind="))
+                   (intern (surveyor--menu-arg args "--engine="))
+                   (intern (surveyor--menu-arg args "--level=")))))
 
 (defun surveyor-generate-defun ()
   "Generate the diagram selected in the menu for the defun at point."
@@ -704,15 +741,16 @@ is nil it is read interactively.  LEVEL defaults to `surveyor-level'."
 ;;;###autoload (autoload 'surveyor "surveyor" nil t)
 (transient-define-prefix surveyor ()
   "Generate an LLM diagram of the code at hand."
-  :init-value
-  (lambda (obj)
-    (oset obj value (list "--kind=flowchart"
-                          (format "--level=%s" surveyor-level))))
+  ;; The default-value slot. Unlike `:init-value' it yields to values
+  ;; set in-session or saved with `transient-save'.
+  :value #'surveyor--menu-defaults
   ["Options"
-   ("k" "Diagram kind" "--kind=" :choices surveyor--all-kinds)
-   ("l" "Level (code flow vs. logical flow)" "--level="
-    :choices surveyor--level-names)
-   ("e" "Engine" "--engine=" :choices surveyor--engine-names)]
+   ("k" "Diagram kind" "--kind=" :class surveyor--choice
+    :prompt "Diagram kind: " :choices surveyor--all-kinds)
+   ("l" "Level (code flow vs. logical flow)" "--level=" :class surveyor--choice
+    :prompt "Abstraction level: " :choices surveyor--level-names)
+   ("e" "Engine" "--engine=" :class surveyor--choice
+    :prompt "Engine: " :choices surveyor--engine-names)]
   ["Generate"
    ("d" "Defun at point" surveyor-generate-defun)
    ("f" "Whole file" surveyor-generate-file)])

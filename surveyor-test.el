@@ -137,6 +137,83 @@
   (should (equal (surveyor--engine-names) '("auto" "d2" "mermaid" "dot")))
   (should (equal (surveyor--level-names) '("code" "logical"))))
 
+;;;; Menu options
+
+(defun surveyor-test--option-spec (key)
+  "Return the menu option bound to KEY as a plist.
+Transient's layout format changed across versions; cope with both."
+  (let ((entry (transient-get-suffix 'surveyor key)))
+    (if (keywordp (cadr entry))
+        (cdr entry)                     ; (class :key ...)
+      (car (last entry)))))             ; (level class (:key ...))
+
+(ert-deftest surveyor-menu-starts-fully-populated ()
+  "Every option opens with a value taken from the user options."
+  (should (equal (surveyor--menu-defaults)
+                 '("--kind=flowchart" "--level=code" "--engine=auto")))
+  (let ((surveyor-kind 'class)
+        (surveyor-level 'logical)
+        (surveyor-engine 'mermaid))
+    (should (equal (surveyor--menu-defaults)
+                   '("--kind=class" "--level=logical" "--engine=mermaid"))))
+  ;; No declared option is missing from the defaults.
+  (dolist (key '("k" "l" "e"))
+    (should (surveyor--menu-arg
+             (surveyor--menu-defaults)
+             (plist-get (surveyor-test--option-spec key) :argument)))))
+
+(ert-deftest surveyor-menu-defaults-yield-to-saved-values ()
+  "The defaults sit in `default-value', which set and saved values shadow.
+An `init-value' function would re-apply them on every invocation."
+  (let ((prefix (get 'surveyor 'transient--prefix)))
+    (should (eq (oref prefix default-value) #'surveyor--menu-defaults))
+    (should-not (slot-boundp prefix 'init-value))))
+
+(ert-deftest surveyor-menu-options-use-the-choice-class ()
+  "All three options are `surveyor--choice' instances with choices."
+  (dolist (key '("k" "l" "e"))
+    (should (memq 'surveyor--choice (transient-get-suffix 'surveyor key)))
+    (should (functionp (plist-get (surveyor-test--option-spec key)
+                                  :choices)))))
+
+(ert-deftest surveyor-menu-choice-is-never-unset ()
+  "Invoking a set option re-reads it, and RET keeps the current value."
+  (let (def initial)
+    (cl-letf (;; The :around method refreshes the transient buffer, which
+              ;; needs a live prefix; only the reading behavior is under test.
+              ((symbol-function 'transient--show) #'ignore)
+              ((symbol-function 'completing-read)
+               (lambda (_prompt _table &optional _pred _req init _hist d)
+                 (setq initial init def d)
+                 ;; `completing-read' returns DEF on empty required input.
+                 d)))
+      (let ((obj (surveyor--choice :prompt "Kind: "
+                                   :choices #'surveyor--all-kinds)))
+        (oset obj value "sequence")
+        (should (equal (transient-infix-read obj) "sequence")))
+      (should (equal def "sequence"))
+      ;; The current value is the default, not initial input to erase.
+      (should-not initial)
+      ;; Unset (a stale save from an old version): offer the first choice.
+      (let ((obj (surveyor--choice :prompt "Level: "
+                                   :choices #'surveyor--level-names)))
+        (oset obj value nil)
+        (should (equal (transient-infix-read obj) "code"))))))
+
+(ert-deftest surveyor-menu-auto-engine-really-autodetects ()
+  "Choosing \"auto\" in the menu overrides a pinned `surveyor-engine'."
+  (let (context)
+    (cl-letf (((symbol-function 'transient-args)
+               (lambda (_prefix)
+                 '("--kind=flowchart" "--level=code" "--engine=auto")))
+              ((symbol-function 'executable-find)
+               (lambda (program) (when (equal program "dot") "/opt/dot")))
+              ((symbol-function 'surveyor--start)
+               (lambda (ctx) (setq context ctx))))
+      (let ((surveyor-engine 'd2))      ; pinned, but not installed
+        (surveyor--menu-run #'ignore))
+      (should (eq (plist-get context :engine) 'dot)))))
+
 (ert-deftest surveyor-save-default-name-includes-level ()
   "A logical diagram saves under a name distinct from the code one."
   (with-temp-buffer
@@ -145,6 +222,32 @@
                 surveyor--file "/tmp/surveyor-abc123.svg")
     (should (equal (surveyor--save-default-name)
                    "foo.el-logical-flowchart.svg"))))
+
+(ert-deftest surveyor-read-kind-offers-the-customized-default ()
+  "The kind prompt defaults to `surveyor-kind', engine permitting."
+  (cl-letf (((symbol-function 'completing-read)
+             (lambda (_prompt _table &optional _pred _req _init _hist def)
+               def)))
+    (let ((surveyor-kind 'sequence))
+      (should (eq (surveyor--read-kind (surveyor-test--engine 'mermaid))
+                  'sequence))
+      ;; The engine cannot draw it: fall back to its first kind.
+      (should (eq (surveyor--read-kind
+                   '(:kinds ((class . "") (flowchart . ""))))
+                  'class)))))
+
+(ert-deftest surveyor-read-kind-single-kind-skips-the-prompt ()
+  (cl-letf (((symbol-function 'completing-read)
+             (lambda (&rest _) (ert-fail "Prompted despite a single kind"))))
+    (should (eq (surveyor--read-kind (surveyor-test--engine 'dot))
+                'flowchart))))
+
+(ert-deftest surveyor-kind-offers-every-drawable-kind ()
+  "`surveyor-kind's customize choices track `surveyor-engines'."
+  (should (seq-set-equal-p
+           (mapcar (lambda (choice) (symbol-name (car (last choice))))
+                   (cdr (get 'surveyor-kind 'custom-type)))
+           (surveyor--all-kinds))))
 
 (ert-deftest surveyor-run-rejects-unsupported-kind ()
   "A menu kind the resolved engine cannot draw signals a user-error."

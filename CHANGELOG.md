@@ -24,3 +24,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `surveyor`: transient menu over diagram kind, level, engine, and scope.
 - Abstraction levels: `code` (uses code symbols) and `logical` (uses plain
   English).
+- `surveyor-kind`: user option for the default diagram kind.

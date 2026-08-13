@@ -109,8 +109,9 @@ alist entirely.
 
 | Variable                       | Default  | Purpose                                        |
 |--------------------------------|----------|------------------------------------------------|
-| `surveyor-engine`              | `auto`   | Diagram engine: `auto`, `d2`, `mermaid`, `dot` |
+| `surveyor-kind`                | `flowchart` | Default diagram kind: `flowchart`, `sequence`, `class` |
 | `surveyor-level`               | `code`   | Default abstraction level: `code`, `logical`   |
+| `surveyor-engine`              | `auto`   | Diagram engine: `auto`, `d2`, `mermaid`, `dot` |
 | `surveyor-d2-command`          | `"d2"`   | D2 executable                                  |
 | `surveyor-mmdc-command`        | `"mmdc"` | Mermaid CLI executable                         |
 | `surveyor-dot-command`         | `"dot"`  | Graphviz executable                            |
