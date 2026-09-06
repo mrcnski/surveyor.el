@@ -289,14 +289,18 @@ nodes), and :prompt (extra instruction added to the request, or nil).")
 
 (defun surveyor--imenu-symbols ()
   "Return a flat list of symbol names from imenu, or nil."
-  (ignore-errors
-    (let (names)
-      (cl-labels ((walk (items)
-                    (dolist (item items)
-                      (cond ((imenu--subalist-p item) (walk (cdr item)))
-                            ((stringp (car item)) (push (car item) names))))))
-        (walk (imenu--make-index-alist t)))
-      (nreverse names))))
+  ;; Return nil when the major mode has no imenu support. Even with its NOERROR
+  ;; argument, `imenu--make-index-alist' signals `imenu-unavailable'.
+  (let ((index (condition-case nil
+                   (imenu--make-index-alist t)
+                 (imenu-unavailable nil)))
+        names)
+    (cl-labels ((walk (items)
+                  (dolist (item items)
+                    (cond ((imenu--subalist-p item) (walk (cdr item)))
+                          ((stringp (car item)) (push (car item) names))))))
+      (walk index))
+    (nreverse names)))
 
 (defun surveyor--defun-context ()
   "Collect the defun at point as a diagram context plist."

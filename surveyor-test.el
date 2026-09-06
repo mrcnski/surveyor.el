@@ -68,6 +68,23 @@
 (ert-deftest surveyor-clip-passthrough ()
   (should (equal (surveyor--clip "short") "short")))
 
+;;;; surveyor--imenu-symbols
+
+(ert-deftest surveyor-imenu-symbols-nil-without-imenu-support ()
+  "Returns nil, without signaling, when the major mode has no imenu index."
+  (with-temp-buffer
+    (text-mode)
+    (insert "just some prose\n")
+    (should (null (surveyor--imenu-symbols)))))
+
+(ert-deftest surveyor-imenu-symbols-propagates-other-errors ()
+  "Only `imenu-unavailable' is handled; other errors are not hidden."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (cl-letf (((symbol-function 'imenu--make-index-alist)
+               (lambda (&rest _) (error "Boom"))))
+      (should-error (surveyor--imenu-symbols)))))
+
 ;;;; surveyor--build-prompt
 
 (defun surveyor-test--engine (name)
