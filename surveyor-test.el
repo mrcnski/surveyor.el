@@ -85,6 +85,14 @@
                (lambda (&rest _) (error "Boom"))))
       (should-error (surveyor--imenu-symbols)))))
 
+(ert-deftest surveyor-imenu-symbols-omits-rescan-entry ()
+  "Flattens nested imenu groups and drops imenu's own *Rescan* entry."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (insert "(defun foo () 1)\n(defvar bar 2)\n(defun baz () 3)\n")
+    (should (equal (sort (surveyor--imenu-symbols) #'string<)
+                   '("bar" "baz" "foo")))))
+
 ;;;; surveyor--build-prompt
 
 (defun surveyor-test--engine (name)

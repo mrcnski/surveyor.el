@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- imenu's `*Rescan*` menu entry is no longer sent to the LLM as one of the
+  file's definitions.
+
 ## [0.1.0] - 2026-08-17
 
 ### Added

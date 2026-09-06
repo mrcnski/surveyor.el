@@ -297,8 +297,11 @@ nodes), and :prompt (extra instruction added to the request, or nil).")
         names)
     (cl-labels ((walk (items)
                   (dolist (item items)
-                    (cond ((imenu--subalist-p item) (walk (cdr item)))
-                          ((stringp (car item)) (push (car item) names))))))
+                    (cond
+                     ;; imenu prepends its "*Rescan*" menu entry to the index.
+                     ((equal item imenu--rescan-item))
+                     ((imenu--subalist-p item) (walk (cdr item)))
+                     ((stringp (car item)) (push (car item) names))))))
       (walk index))
     (nreverse names)))
 
