@@ -3,6 +3,8 @@
 
 # surveyor
 
+<a href="https://melpa.org/#/surveyor"><img alt="MELPA" src="https://melpa.org/packages/surveyor-badge.svg"/></a>
+<a href="https://stable.melpa.org/#/surveyor"><img alt="MELPA Stable" src="https://stable.melpa.org/packages/surveyor-badge.svg"/></a>
 <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue.svg"/></a>
 <img alt="Emacs 29.1+" src="https://img.shields.io/badge/Emacs-29.1%2B-7F5AB6?logo=gnuemacs&logoColor=white"/>
 
@@ -39,11 +41,45 @@ repair, and shows the image in a view buffer.
 
 ## Installation
 
-Not yet on MELPA. From a checkout:
+### MELPA
+
+surveyor is available on [MELPA](https://melpa.org/#/surveyor):
+
+```
+M-x package-install RET surveyor RET
+```
+
+Or with use-package:
 
 ```elisp
 (use-package surveyor
-  :load-path "path/to/surveyor.el"
+  :ensure t
+  :commands (surveyor surveyor-defun surveyor-file))
+```
+
+This route also pulls in `gptel` and `transient`, which the manual route below
+leaves for you to install.
+
+### Manual Installation
+
+1. Clone or download this repository:
+
+```bash
+git clone https://github.com/mrcnski/surveyor.el.git ~/.emacs.d/packages/surveyor.el
+```
+
+2. Add to your Emacs configuration:
+
+```elisp
+(add-to-list 'load-path "~/.emacs.d/packages/surveyor.el")
+(require 'surveyor)
+```
+
+Or with use-package:
+
+```elisp
+(use-package surveyor
+  :load-path "~/.emacs.d/packages/surveyor.el"
   :commands (surveyor surveyor-defun surveyor-file))
 ```
 
